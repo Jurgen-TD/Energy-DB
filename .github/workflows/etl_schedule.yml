@@ -22,7 +22,22 @@ jobs:
         with:
           python-version: '3.9'
 
-      # 3. Das Skript ausführen
+      # 3. Installation der Abhängigkeiten aus requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4. Das Skript ausführen
       - name: Run ETL Script
         run: python main.py
+
+      # 5. Hinzufügen der CSV-Daten zum GitHub Run 
+      # so können die Daten direkt auf GitHub geprüft werden.
+      - name: Upload Data Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: smard-energy-data
+          path: smard_data.csv
+          
 
