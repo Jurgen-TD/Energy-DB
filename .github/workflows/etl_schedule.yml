@@ -1,0 +1,28 @@
+name: Daily Energy Data Update
+
+# WANN soll es laufen?
+on:
+  workflow_dispatch:      # Erlaubt den manuellen Start per Klick (zum Testen)
+  schedule:
+    - cron: '0 8 * * *'   # Jeden Tag um 08:00 Uhr UTC
+
+# WAS soll passieren?
+jobs:
+  run-python-script:
+    runs-on: ubuntu-latest # Wir leihen uns einen Linux-Server von GitHub
+
+    steps:
+      # 1. Code vom Repo auf den Server holen
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # 2. Python installieren
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # 3. Das Skript ausführen
+      - name: Run ETL Script
+        run: python main.py
+
