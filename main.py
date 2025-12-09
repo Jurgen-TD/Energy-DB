@@ -1,6 +1,5 @@
 # main.py
 import datetime
-import pandas as pd
 
 
 def run_etl():
