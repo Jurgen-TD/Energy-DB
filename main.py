@@ -8,24 +8,49 @@ import datetime
 SMARD_API_BASE_URL = "https://www.smard.de/app/chart_data/"
 SMARD_DATA_ID = 410
 REGION = "DE"
-RESOLUTION = "index_day" # Datenpunkte im 15-Minuten-Raster
+RESOLUTION = "hour" # Datenpunkte im 60-Minuten-Raster
+
+# Die Anzahl der Tage, die wir von der API abrufen
+DAYS_TO_FETCH = 30
 
 def fetch_smard_data(data_id: int, region: str) -> dict:
-    """Ruft die Rohdaten von der SMARD API ab."""
+    """Ruft die Rohdaten von der SMARD API für einen bestimmten Zeitraum ab."""
     print(f"Starte API-Abruf für Daten-ID: {data_id}")
-    url = f"{SMARD_API_BASE_URL}{data_id}/{region}/{RESOLUTION}.json"
     
+    # NEUE DATUMSLOGIK
+    end_date = datetime.datetime.now(datetime.timezone.utc)
+    start_date = end_date - datetime.timedelta(days=DAYS_TO_FETCH)
+    
+    # Umwandlung in Unix-Millisekunden-Zeitstempel (von der API benötigt)
+    start_ts_ms = int(start_date.timestamp() * 1000)
+    end_ts_ms = int(end_date.timestamp() * 1000)
+    
+    print(f"Abrufzeitraum: {start_date.strftime('%Y-%m-%d')} bis {end_date.strftime('%Y-%m-%d')}")
+    
+    # Die URL mit Start- und End-Parametern
+    url = (
+        f"{SMARD_API_BASE_URL}{data_id}/{region}/{data_id}_{region}_{RESOLUTION}_1627855200000.json"
+#        f"?start={start_ts_ms}&end={end_ts_ms}" # WICHTIGE ÄNDERUNG
+    )
+    print("URL: ")
+    print(url)
+
     try:
         response = requests.get(url, timeout=30)
-        response.raise_for_status() # Löst einen Fehler für schlechte Statuscodes (4xx oder 5xx) aus
+        response.raise_for_status()
         
         data = response.json()
+        
+        # ZUSÄTZLICHER CHECK: Prüfen, ob der Schlüssel 'series' existiert und gefüllt ist
+        if 'series' not in data or not data['series']:
+            print("API-Antwort ist gültig, enthält aber keine 'series' Daten.")
+            return {}
+            
         print("API-Abruf erfolgreich.")
         return data
         
     except requests.exceptions.RequestException as e:
         print(f"Fehler beim API-Abruf: {e}")
-        # Wichtig für DE-Projekte: Bei Fehler leer zurückgeben oder alten Zustand laden.
         return {}
 
 
@@ -44,18 +69,24 @@ def transform_data(raw_data: dict) -> pd.DataFrame:
     # Die Daten sind als Liste von [Timestamp, Wert] gespeichert
     all_data = []
     
-    for source in raw_data['series']:
-        source_name = source['name']
-        source_unit = source['unit']
+#    for source in raw_data['series']:
+#        print(source)
+#        source_name = source[0]#['name']
+#        source_unit = source[1]#['unit']
         # 'data' enthält die eigentlichen Zeitreihendaten
         
         # Iteriere durch jeden Datenpunkt und speichere ihn ab
-        for timestamp_ms, value in source['data']:
-            all_data.append({
-                'Timestamp_ms': timestamp_ms,
-                'Energiequelle': source_name,
-                'Leistung_MW': value if value is not None else 0
-            })
+#        for timestamp_ms, value in source['data']:
+#            all_data.append({
+#                'Timestamp_ms': timestamp_ms,
+#                'Energiequelle': source_name,
+#                'Leistung_MW': value if value is not None else 0
+#            })
+
+
+    for ts, value in raw_data['series']:
+        if value is not None: 
+            all_data.append({'Timestamp_ms': ts, 'Leistung_MW': value})
 
     df = pd.DataFrame(all_data)
 
@@ -75,26 +106,26 @@ def transform_data(raw_data: dict) -> pd.DataFrame:
     
     # 4. Erneuerbare-Energien-Anteil berechnen
     # Neue Spalte: Ist die Quelle erneuerbar?
-    df['Is_Erneuerbar'] = df['Energiequelle'].apply(lambda x: 1 if x in renewable_sources else 0)
+    #df['Is_Erneuerbar'] = df['Energiequelle'].apply(lambda x: 1 if x in renewable_sources else 0)
     
     # Summe der Erneuerbaren pro Zeitstempel
-    renewable_power = df[df['Is_Erneuerbar'] == 1].groupby('DatumUhrzeit')['Leistung_MW'].sum().reset_index(name='Erneuerbar_MW')
+    #renewable_power = df[df['Is_Erneuerbar'] == 1].groupby('DatumUhrzeit')['Leistung_MW'].sum().reset_index(name='Erneuerbar_MW')
     
     # Gesamtdatenframe mergen und den Anteil berechnen
-    df = pd.merge(df, renewable_power, on='DatumUhrzeit', how='left').fillna(0)
-    df['Erneuerbar_Anteil'] = (df['Erneuerbar_MW'] / df['Gesamtlast_MW']) * 100
-    df['Erneuerbar_Anteil'] = df['Erneuerbar_Anteil'].replace([float('inf'), -float('inf')], 0).round(2)
+#    df = pd.merge(df, renewable_power, on='DatumUhrzeit', how='left').fillna(0)
+#    df['Erneuerbar_Anteil'] = (df['Erneuerbar_MW'] / df['Gesamtlast_MW']) * 100
+#    df['Erneuerbar_Anteil'] = df['Erneuerbar_Anteil'].replace([float('inf'), -float('inf')], 0).round(2)
     
     # Nur die wichtigsten Spalten für Tableau auswählen
-    df_final = df[['DatumUhrzeit', 'Datum', 'Energiequelle', 'Leistung_MW', 'Gesamtlast_MW', 'Erneuerbar_MW', 'Erneuerbar_Anteil']].copy()
+ #   df_final = df[['DatumUhrzeit', 'Datum', 'Energiequelle', 'Leistung_MW', 'Gesamtlast_MW', 'Erneuerbar_MW', 'Erneuerbar_Anteil']].copy()
     
     # Bereinigen von Duplikaten (falls die API welche liefert) und sortieren
-    df_final.drop_duplicates(inplace=True)
-    df_final.sort_values(by=['DatumUhrzeit', 'Energiequelle'], inplace=True)
+#    df_final.drop_duplicates(inplace=True)
+#    df_final.sort_values(by=['DatumUhrzeit', 'Energiequelle'], inplace=True)
 
-    print(f"Datentransformation abgeschlossen. {len(df_final)} Zeilen bereit.")
-    return df_final
-
+    print(f"Datentransformation abgeschlossen. {len(df)} Zeilen bereit.")
+#    return df_final
+    return df
 
 def run_etl():
     """Der Hauptprozess, der auf GitHub Actions laufen wird."""
