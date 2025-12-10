@@ -1,6 +1,7 @@
 # main.py
 import requests
 import pandas as pd
+import os
 import datetime
 
 # SMARD API Konfiguration
@@ -144,7 +145,9 @@ def run_etl():
 
     # 3. LOAD (Nächster Schritt: Google Sheets)
     # Zum Testen speichern wir die Daten als CSV, um sie auf GitHub zu prüfen.
-    csv_file = 'smard_data.csv'
+    repo_root = os.getcwd()
+    csv_file = os.path.join(repo_root, 'smard_data.csv')
+    
     # Wir überschreiben die Datei jedes Mal. Für Google Sheets nutzen wir später Append.
     clean_df.to_csv(csv_file, index=False)
     print(f"Daten erfolgreich in '{csv_file}' gespeichert.")
