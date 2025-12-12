@@ -34,10 +34,10 @@ jobs:
 
       # 5. Hinzufügen der CSV-Daten zum GitHub Run 
       # so können die Daten direkt auf GitHub geprüft werden.
-      - name: Upload Data Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: smard-energy-data
-          path: ./smard_data.csv
+      #- name: Upload Data Artifact
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: smard-energy-data
+      #    path: ./smard_data.csv
           
 
