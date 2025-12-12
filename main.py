@@ -230,19 +230,24 @@ def run_etl():
         raw_data.clear() # clear raw data block to be filled for next iteration
 
 #-- 2. TRANSFORM
-    clean_df = transform_data(raw_data_frame)
+    df_clean = transform_data(raw_data_frame)
     
-    if clean_df.empty:
+    if d_cleanf.empty:
         print("Prozess beendet: Keine Daten zum Speichern.")
         return
 
 #-- 3. LOAD
-    # Zum Testen speichere ich die Daten als CSV, um sie lokal oder auf GitHub zu prüfen.
+    # 3.1 - Zum Testen speichere ich die Daten als CSV, um sie lokal oder auf GitHub zu prüfen.
     csv_file = 'smard_data.csv'
-    clean_df.to_csv(csv_file, index=False)
+    df_clean.to_csv(csv_file, index=False)
     print(f"Daten erfolgreich lokal in '{csv_file}' gespeichert.")
 
-    load_to_google_sheets(clean_df) # Auskommentieren, wenn ich lokal teste !
+    # 3.2 Für das Laden in Google Sheets muss ich das Datum in ein ISO-Format ändern, damit der JSON-Parser damit umgehen kann
+    # Ich "klone" das DataFrame, bevor es geändert wird
+    df_load = df_clean.copy() 
+    # Konvertiert alle Timestamps in ISO-String-Format, das JSON-kompatibel ist
+    df_load['DatumUhrzeit'] = df_load['DatumUhrzeit'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    load_to_google_sheets(df_load) # Auskommentieren, wenn ich lokal teste !
     
     end_time = datetime.datetime.now()
     duration = (end_time - start_time).total_seconds()
