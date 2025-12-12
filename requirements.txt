@@ -3,3 +3,5 @@ requests
 pandas
 matplotlib
 datetime
+gspread
+oauth2client # Wird von gspread für die Service Accounts benötigt
