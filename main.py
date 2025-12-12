@@ -3,6 +3,13 @@ import pandas as pd
 import datetime
 import matplotlib
 import matplotlib.pyplot as plt
+import os
+import gspread # import google spread connector
+import json
+import base64
+
+# Name der Google Sheet Datei
+GOOGLE_SHEET_NAME = "SMARD Energy Data" # muss ich noch anpassen
 
 # SMARD API Konfiguration
 # ID 410: Tatsächliche Bruttostromerzeugung (Deutschland, alle Quellen)
@@ -132,6 +139,53 @@ def transform_data(raw_data: list) -> pd.DataFrame:
     print(f"Datentransformation abgeschlossen. {len(df)} Zeilen bereit.")
     return df
 
+#############################################################
+# Daten zu Google Sheets laden
+# Stellt eine Verbindung zu Google Sheets über das GitHub Secret her und hängt die Daten an.
+#############################################################
+def load_to_google_sheets(df: pd.DataFrame):
+    print("Open connection to Google Sheets...")
+    
+    # 1. Secret aus Umgebungsvariable lesen
+    gcp_credentials_json_str = os.environ.get('GCP_CREDENTIALS')
+    if not gcp_credentials_json_str:
+        print("FEHLER: GCP_CREDENTIALS Secret nicht gefunden. Laden abgebrochen.")
+        return
+
+    # 2. JSON Key in ein Python-Objekt wandeln
+    try:
+        credentials = json.loads(gcp_credentials_json_str)
+    except json.JSONDecodeError as e:
+        print(f"FEHLER: Secret-JSON konnte nicht geparsed werden: {e}")
+        return
+
+    # 3. Authentifizierung und Verbindung
+    try:
+        # Hier authentifizieren ich mich mit dem JSON Key
+        gc = gspread.service_account_from_dict(credentials)
+        sh = gc.open(GOOGLE_SHEET_NAME)
+        worksheet = sh.sheet1
+        print(f"Verbindung zu Google Sheet '{GOOGLE_SHEET_NAME}' erfolgreich.")
+    except gspread.exceptions.SpreadsheetNotFound:
+        print(f"FEHLER: Google Sheet '{GOOGLE_SHEET_NAME}' nicht gefunden. Prüfen Sie den Namen und die Freigabe des Service Accounts.")
+        return
+    except Exception as e:
+        print(f"FEHLER bei der Authentifizierung oder Verbindung: {e}")
+        return
+
+    # 4. Daten vorbereiten und anhängen
+    # Konvertieren des DataFrame in eine zwei Listen (Header + Daten)
+    header = df.columns.tolist()
+    data_to_append = df.values.tolist()
+    # Da ich immer alles neu lade, leere ich die Tabelle zuerst (Trunkate & Load)
+    worksheet.clear()
+    print("Sheet geleert (Truncate).")
+    
+    # 5. Header und Daten gemeinsam laden
+    worksheet.append_rows([header] + data_to_append)
+    
+    print(f"Erfolgreich {len(data_to_append)} Zeilen in Google Sheets geschrieben.")
+
 
 
 ###########################################################
@@ -182,12 +236,14 @@ def run_etl():
         print("Prozess beendet: Keine Daten zum Speichern.")
         return
 
-#-- 3. LOAD 
-    # Zum Testen speichern wir die Daten als CSV, um sie auf GitHub zu prüfen.
-    csv_file = 'smard_data.csv'
-    # Wir überschreiben die Datei jedes Mal. Für Google Sheets nutzen wir später Append.
-    clean_df.to_csv(csv_file, index=False)
-    print(f"Daten erfolgreich in '{csv_file}' gespeichert.")
+#-- 3. LOAD
+    # Zum Testen speichere ich die Daten als CSV, um sie lokal oder auf GitHub zu prüfen.
+    #csv_file = 'smard_data.csv'
+    # Ich überschreibe die Datei jedes Mal.
+    #clean_df.to_csv(csv_file, index=False)
+    #print(f"Daten erfolgreich in '{csv_file}' gespeichert.")
+
+    load_to_google_sheets(clean_df) # Auskommentieren, wenn ich lokal teste !
     
     end_time = datetime.datetime.now()
     duration = (end_time - start_time).total_seconds()
