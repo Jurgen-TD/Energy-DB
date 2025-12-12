@@ -1,153 +1,190 @@
-# main.py
 import requests
 import pandas as pd
-import os
 import datetime
+import matplotlib
+import matplotlib.pyplot as plt
 
 # SMARD API Konfiguration
 # ID 410: Tatsächliche Bruttostromerzeugung (Deutschland, alle Quellen)
 SMARD_API_BASE_URL = "https://www.smard.de/app/chart_data/"
-SMARD_DATA_ID = 410
-REGION = "DE"
+REGION = "DE" # in the first place we focus on Germany
 RESOLUTION = "hour" # Datenpunkte im 60-Minuten-Raster
+BLOCKS_TO_FETCH = 2 # the number of blocks to be fetched / one block is one week 
 
-# Die Anzahl der Tage, die wir von der API abrufen
-DAYS_TO_FETCH = 30
+# SMARD DATA IDs:
+# As I understood it is not possible to fetch several parameters at the same time
+# instead multiple requests must be carried out
+# We always have to check availability of data blocks for each filter / parameter
+SMARD_FILTER = {
+    'NETZLAST': 410,  # overall consumption
+    'BRAUNKOHLE': 1223, 
+    'WINDOFFSHORE': 1225,
+    'WATER': 1226,    # Wasserkraft
+    'FOSSIL_MISC': 1227,
+    'RENEWABLE_MISC': 1228,
+    'BIOGAS': 4066,
+    'WINDONSHORE': 4067,
+    'SOLAR': 4068,
+    'STEINKOHLE': 4069,
+    'PUMPSTORAGE': 4070,
+    'GAS': 4071,
+    'RESIDUALLOAD': 4359,
+    'PUMPEDCONSUMED': 4387,
+    'PRICE_DE': 4169,
+    'PRICE_BG': 4996,
+    'PRICE_NW': 4997,
+    'PRICE_AU': 4170, # Austria
+    'PRICE_FR': 254,
+    'PRICE_PL': 258,
+    'PRICE_IT': 255,
+    'PRICE_CH': 259,  # Switzerland
+    'PRICE_UN': 262   # Hungary
+}
 
-def fetch_smard_data(data_id: int, region: str) -> dict:
-    """Ruft die Rohdaten von der SMARD API für einen bestimmten Zeitraum ab."""
-    print(f"Starte API-Abruf für Daten-ID: {data_id}")
+
+###########################################################
+#   Frage die SMARD API nach den verfügbaren ladbaren Blöcken an
+###########################################################
+def get_available_blocks(data_id: int, region: str) -> list:
+    """
+    Lädt die verfügbaren Zeitpunkte (Blöcke, die geladen werden können)
+    """
+    url = f"{SMARD_API_BASE_URL}/{data_id}/{region}/index_{RESOLUTION}.json"
     
-    # NEUE DATUMSLOGIK
-    end_date = datetime.datetime.now(datetime.timezone.utc)
-    start_date = end_date - datetime.timedelta(days=DAYS_TO_FETCH)
-    
-    # Umwandlung in Unix-Millisekunden-Zeitstempel (von der API benötigt)
-    start_ts_ms = int(start_date.timestamp() * 1000)
-    end_ts_ms = int(end_date.timestamp() * 1000)
-    
-    print(f"Abrufzeitraum: {start_date.strftime('%Y-%m-%d')} bis {end_date.strftime('%Y-%m-%d')}")
-    
+    try:
+        r = requests.get(url, timeout=15)
+        print(f" -> Status {r.status_code}, Content-Type: {r.headers.get('Content-Type')}")
+        data = r.json()
+        timestamps = data["timestamps"]
+        print(f"Gefundene Timestamps: {len(timestamps)} Stück")
+        return timestamps
+    except requests.exceptions.RequestException as e:
+        print(f"Fehler beim API-Abruf: {e}")
+        return []
+
+
+###########################################################
+#   Holt einen Daten-Block von der SMARD API und gibt diesen als einfache Liste zurück  
+###########################################################
+def fetch_smard_data(data_id: int, region: str, block: int) -> list:
+    """Ruft die Rohdaten von der SMARD API für einen bestimmten Block ab."""
     # Die URL mit Start- und End-Parametern
-    url = (
-        f"{SMARD_API_BASE_URL}{data_id}/{region}/{data_id}_{region}_{RESOLUTION}_1627855200000.json"
-#        f"?start={start_ts_ms}&end={end_ts_ms}" # WICHTIGE ÄNDERUNG
-    )
-    print("URL: ")
-    print(url)
+    url = (f"{SMARD_API_BASE_URL}{data_id}/{region}/{data_id}_{region}_{RESOLUTION}_{block}.json")
+    print(f"FETCH! Data: {data_id} URL: {url}")
 
     try:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
-        
         data = response.json()
         
         # ZUSÄTZLICHER CHECK: Prüfen, ob der Schlüssel 'series' existiert und gefüllt ist
         if 'series' not in data or not data['series']:
             print("API-Antwort ist gültig, enthält aber keine 'series' Daten.")
-            return {}
-            
-        print("API-Abruf erfolgreich.")
-        return data
+            return []
+        return data["series"]
         
     except requests.exceptions.RequestException as e:
         print(f"Fehler beim API-Abruf: {e}")
-        return {}
+        return []
 
 
-def transform_data(raw_data: dict) -> pd.DataFrame:
-    """
-    Wandelt die verschachtelte JSON-Struktur in ein flaches, 
-    Tableau-freundliches DataFrame um.
-    """
-    if not raw_data or 'series' not in raw_data:
+###########################################################
+#   Wandelt die Liste von der SMARD -API in ein für die Verarbeitung optimiertes DataFrame 
+###########################################################
+def transform_data(raw_data: list) -> pd.DataFrame:
+    if not raw_data:
         print("Keine Rohdaten zum Transformieren gefunden.")
         return pd.DataFrame()
 
     print("Starte Datentransformation...")
     
-    # 1. Daten in ein DataFrame konvertieren
-    # Die Daten sind als Liste von [Timestamp, Wert] gespeichert
+    # Step 0: Daten in ein DataFrame konvertieren
+    # Als Zwischenschritt werden die rohen Daten in ein Dict überführt und mit Überschriften versehen
+    # Die Daten sind noch im Long-Format 
+    # Die Daten kommen als Liste im Format: [Timestamp, Filter, Wert] 
     all_data = []
-    
-#    for source in raw_data['series']:
-#        print(source)
-#        source_name = source[0]#['name']
-#        source_unit = source[1]#['unit']
-        # 'data' enthält die eigentlichen Zeitreihendaten
-        
-        # Iteriere durch jeden Datenpunkt und speichere ihn ab
-#        for timestamp_ms, value in source['data']:
-#            all_data.append({
-#                'Timestamp_ms': timestamp_ms,
-#                'Energiequelle': source_name,
-#                'Leistung_MW': value if value is not None else 0
-#            })
-
-
-    for ts, value in raw_data['series']:
-        if value is not None: 
-            all_data.append({'Timestamp_ms': ts, 'Leistung_MW': value})
-
+    for ts, fltr, value in raw_data:
+        all_data.append({'Timestamp': ts, 'Filter': fltr, 'Value': value})
     df = pd.DataFrame(all_data)
+    #df.drop_duplicates(subset=['Timestamp', 'Filter', 'Value'], inplace=True)
 
-    # 2. Zeitstempel formatieren
-    df['DatumUhrzeit'] = pd.to_datetime(df['Timestamp_ms'], unit='ms')
-    # Tableau bevorzugt oft getrennte Spalten für Datum und Zeit
-    df['Datum'] = df['DatumUhrzeit'].dt.date
-    df['Uhrzeit'] = df['DatumUhrzeit'].dt.time
-    
-    # 3. Berechnungen für den "Energiewende Tracker"
-    # Die Summe der Leistung pro Zeitstempel ist die Gesamtlast
-    total_power = df.groupby('DatumUhrzeit')['Leistung_MW'].sum().reset_index(name='Gesamtlast_MW')
-    df = pd.merge(df, total_power, on='DatumUhrzeit')
-    
-    # Bestimme, welche Quellen "Erneuerbar" sind (SMARD-spezifisch)
-    renewable_sources = ['Wind Offshore', 'Wind Onshore', 'Photovoltaik', 'Biomasse', 'Wasserkraft']
-    
-    # 4. Erneuerbare-Energien-Anteil berechnen
-    # Neue Spalte: Ist die Quelle erneuerbar?
-    #df['Is_Erneuerbar'] = df['Energiequelle'].apply(lambda x: 1 if x in renewable_sources else 0)
-    
-    # Summe der Erneuerbaren pro Zeitstempel
-    #renewable_power = df[df['Is_Erneuerbar'] == 1].groupby('DatumUhrzeit')['Leistung_MW'].sum().reset_index(name='Erneuerbar_MW')
-    
-    # Gesamtdatenframe mergen und den Anteil berechnen
-#    df = pd.merge(df, renewable_power, on='DatumUhrzeit', how='left').fillna(0)
-#    df['Erneuerbar_Anteil'] = (df['Erneuerbar_MW'] / df['Gesamtlast_MW']) * 100
-#    df['Erneuerbar_Anteil'] = df['Erneuerbar_Anteil'].replace([float('inf'), -float('inf')], 0).round(2)
-    
-    # Nur die wichtigsten Spalten für Tableau auswählen
- #   df_final = df[['DatumUhrzeit', 'Datum', 'Energiequelle', 'Leistung_MW', 'Gesamtlast_MW', 'Erneuerbar_MW', 'Erneuerbar_Anteil']].copy()
-    
-    # Bereinigen von Duplikaten (falls die API welche liefert) und sortieren
-#    df_final.drop_duplicates(inplace=True)
-#    df_final.sort_values(by=['DatumUhrzeit', 'Energiequelle'], inplace=True)
+    # Step 1: bring data from Long- into Wide- format
+    df = df.pivot(index=['Timestamp'], columns='Filter', values='Value')
+    df = df.rename_axis(columns=None).reset_index()
+
+    # Step 2: Bringe die Daten in eine einheitliche Reihenfolge und ersetze Timestamp in lesbares Format
+    df.sort_values(by=['Timestamp'], inplace=True)
+    df.insert(0,'DatumUhrzeit',pd.to_datetime(df['Timestamp'], unit='ms'))
+    df.drop(columns=['Timestamp'], inplace=True)
+
+    # Step 3: Bereinigen von Duplikaten (falls die API welche liefert) und sortieren
+    df.drop_duplicates(inplace=True)
+
+    # Step 4: Berechne die Summen der erneuerbaren und der fossilen Energien und deren Anteile
+    df['Total_Renew'] = (df['WINDOFFSHORE'] + df['WINDONSHORE'] + df['WATER'] + df['BIOGAS'] + df['SOLAR'] + df['PUMPSTORAGE'] + df['RENEWABLE_MISC']).round(2)
+    df['Total_Fossil'] = (df['BRAUNKOHLE'] + df['STEINKOHLE'] + df['GAS'] + df['FOSSIL_MISC']).round(2)
+    df['Renew_Perc'] = ((df['Total_Renew'] / df['NETZLAST']) * 100).round(2)
+    df['Fossil_Perc'] = ((df['Total_Fossil'] / df['NETZLAST']) * 100).round(2)
+    #print(df.head()) # zum Debuggen können wir die Daten jetzt schon screenen
+    #df.plot(x='DatumUhrzeit')
+    #plt.show()
 
     print(f"Datentransformation abgeschlossen. {len(df)} Zeilen bereit.")
-#    return df_final
     return df
 
+
+
+###########################################################
+#   Main routine for "Extract - Transform - Load 
+###########################################################
 def run_etl():
     """Der Hauptprozess, der auf GitHub Actions laufen wird."""
     start_time = datetime.datetime.now()
     print(f"--- ETL Job gestartet um: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ---")
     
-    # 1. EXTRACT
-    raw_data = fetch_smard_data(SMARD_DATA_ID, REGION)
-    
-    # 2. TRANSFORM
-    clean_df = transform_data(raw_data)
+    filter_lst = [SMARD_FILTER['NETZLAST'],
+                  SMARD_FILTER['BRAUNKOHLE'],
+                  SMARD_FILTER['STEINKOHLE'],
+                  SMARD_FILTER['GAS'],
+                  SMARD_FILTER['FOSSIL_MISC'],
+                  SMARD_FILTER['WINDOFFSHORE'],
+                  SMARD_FILTER['WINDONSHORE'],
+                  SMARD_FILTER['WATER'],    
+                  SMARD_FILTER['BIOGAS'],
+                  SMARD_FILTER['SOLAR'],
+                  SMARD_FILTER['PUMPSTORAGE'],
+                  SMARD_FILTER['RENEWABLE_MISC'], 
+                  #SMARD_FILTER['PRICE_DE'],
+                  #SMARD_FILTER['PRICE_PL']
+                 ]
+    raw_data = []
+    raw_data_frame = []
+
+#-- 1. EXTRACT
+    for fltr in filter_lst:
+        # 1.1 request list with available blocks
+        blocks = get_available_blocks(fltr, REGION)
+        blocks.sort(reverse=True)
+        # 1.2 fetch data
+        for block in blocks[0:BLOCKS_TO_FETCH]:
+            raw_data.extend(fetch_smard_data(fltr, REGION, block)) # be aware using the "extend" method here!
+        
+        f = [k for k, v in SMARD_FILTER.items() if v == fltr][0] ## !!ugly but it works (getting keys for filter values from dict))
+        for ts, value in raw_data:
+            raw_data_frame.append([ts, f, value])
+
+        raw_data.clear() # clear raw data block to be filled for next iteration
+
+#-- 2. TRANSFORM
+    clean_df = transform_data(raw_data_frame)
     
     if clean_df.empty:
         print("Prozess beendet: Keine Daten zum Speichern.")
         return
 
-    # 3. LOAD (Nächster Schritt: Google Sheets)
+#-- 3. LOAD 
     # Zum Testen speichern wir die Daten als CSV, um sie auf GitHub zu prüfen.
-    repo_root = os.getcwd()
-    csv_file = os.path.join(repo_root, 'smard_data.csv')
-    
+    csv_file = 'smard_data.csv'
     # Wir überschreiben die Datei jedes Mal. Für Google Sheets nutzen wir später Append.
     clean_df.to_csv(csv_file, index=False)
     print(f"Daten erfolgreich in '{csv_file}' gespeichert.")
