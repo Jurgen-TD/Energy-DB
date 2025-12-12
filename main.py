@@ -246,6 +246,7 @@ def run_etl():
     # 3.2 Für das Laden in Google Sheets muss ich das Datum in ein ISO-Format ändern, damit der JSON-Parser damit umgehen kann
     # Ich "klone" das DataFrame, bevor es geändert wird
     df_load = df_clean.copy() 
+    df_load = df_load.fillna(0)
     # Konvertiert alle Timestamps in ISO-String-Format, das JSON-kompatibel ist
     df_load['DatumUhrzeit'] = df_load['DatumUhrzeit'].dt.strftime('%Y-%m-%d %H:%M:%S')
     load_to_google_sheets(df_load) # Auskommentieren, wenn ich lokal teste !
