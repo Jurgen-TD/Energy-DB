@@ -238,10 +238,9 @@ def run_etl():
 
 #-- 3. LOAD
     # Zum Testen speichere ich die Daten als CSV, um sie lokal oder auf GitHub zu prüfen.
-    #csv_file = 'smard_data.csv'
-    # Ich überschreibe die Datei jedes Mal.
-    #clean_df.to_csv(csv_file, index=False)
-    #print(f"Daten erfolgreich in '{csv_file}' gespeichert.")
+    csv_file = 'smard_data.csv'
+    clean_df.to_csv(csv_file, index=False)
+    print(f"Daten erfolgreich lokal in '{csv_file}' gespeichert.")
 
     load_to_google_sheets(clean_df) # Auskommentieren, wenn ich lokal teste !
     
