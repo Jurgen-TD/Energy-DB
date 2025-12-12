@@ -232,7 +232,7 @@ def run_etl():
 #-- 2. TRANSFORM
     df_clean = transform_data(raw_data_frame)
     
-    if d_cleanf.empty:
+    if df_clean.empty:
         print("Prozess beendet: Keine Daten zum Speichern.")
         return
 
