@@ -30,14 +30,16 @@ jobs:
 
       # 4. Das Skript ausführen
       - name: Run ETL Script
+        env: 
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
         run: python main.py
 
       # 5. Hinzufügen der CSV-Daten zum GitHub Run 
       # so können die Daten direkt auf GitHub geprüft werden.
-      #- name: Upload Data Artifact
-      #  uses: actions/upload-artifact@v4
-      #  with:
-      #    name: smard-energy-data
-      #    path: ./smard_data.csv
+      - name: Upload Data Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smard-energy-data
+          path: ./smard_data.csv
           
 
