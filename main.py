@@ -182,10 +182,11 @@ def load_to_google_sheets(df: pd.DataFrame):
     print("Sheet geleert (Truncate).")
     
     # 5. Header und Daten gemeinsam laden
-    worksheet.append_rows([header] + data_to_append)
+    worksheet.update([header], 'A1')
+    print("Header in Zeile 1 geschrieben.")
+    worksheet.append_rows(data_to_append)
     
     print(f"Erfolgreich {len(data_to_append)} Zeilen in Google Sheets geschrieben.")
-
 
 
 ###########################################################
