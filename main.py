@@ -251,7 +251,7 @@ def run_etl():
     df_load['DatumUhrzeit'] = df_load['DatumUhrzeit'].dt.strftime('%Y-%m-%d %H:%M:%S')
     
     # 3.3 Tableau arbeitet lieber im Longformat, sodass ich vor dem Laden zu Google Sheets eine Transformation vornehme
-    df_long = df_load.load(
+    df_long = df_load.melt(
         id_vars=['DatumUhrzeit'], 
         value_vars=['NETZLAST', 'BRAUNKOHLE', 'STEINKOHLE', 'GAS', 'FOSSIL_MISC', 'WINDOFFSHORE', 'WINDONSHORE', 'WATER', 'BIOGAS', 'SOLAR', 'PUMPSTORAGE', 'RENEWABLE_MISC', 'Renew_Perc', 'Fossil_Perc'], 
         var_name='Energiequelle', 
