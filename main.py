@@ -249,8 +249,16 @@ def run_etl():
     df_load = df_load.fillna(0)
     # Konvertiert alle Timestamps in ISO-String-Format, das JSON-kompatibel ist
     df_load['DatumUhrzeit'] = df_load['DatumUhrzeit'].dt.strftime('%Y-%m-%d %H:%M:%S')
-    load_to_google_sheets(df_load) # Auskommentieren, wenn ich lokal teste !
     
+    # 3.3 Tableau arbeitet lieber im Longformat, sodass ich vor dem Laden zu Google Sheets eine Transformation vornehme
+    df_long = df.load(
+        id_vars=['DatumUhrzeit'], 
+        value_vars=['NETZLAST', 'BRAUNKOHLE', 'STEINKOHLE', 'GAS', 'FOSSIL_MISC', 'WINDOFFSHORE', 'WINDONSHORE', 'WATER', 'BIOGAS', 'SOLAR', 'PUMPSTORAGE', 'RENEWABLE_MISC', 'Renew_Perc', 'Fossil_Perc'], 
+        var_name='Energiequelle', 
+        value_name='Werte'
+        )
+    load_to_google_sheets(df_long) # Auskommentieren, wenn ich lokal teste !
+
     end_time = datetime.datetime.now()
     duration = (end_time - start_time).total_seconds()
     print(f"--- ETL Job erfolgreich abgeschlossen in {duration:.2f} Sekunden. ---")
