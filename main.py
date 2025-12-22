@@ -209,7 +209,7 @@ def run_etl():
                   SMARD_FILTER['SOLAR'],
                   SMARD_FILTER['PUMPSTORAGE'],
                   SMARD_FILTER['RENEWABLE_MISC'], 
-                  #SMARD_FILTER['PRICE_DE'],
+                  SMARD_FILTER['PRICE_DE'],
                   #SMARD_FILTER['PRICE_PL']
                  ]
     raw_data = []
@@ -253,7 +253,7 @@ def run_etl():
     # 3.3 Tableau arbeitet lieber im Longformat, sodass ich vor dem Laden zu Google Sheets eine Transformation vornehme
     df_long = df_load.melt(
         id_vars=['DatumUhrzeit'], 
-        value_vars=['BRAUNKOHLE', 'STEINKOHLE', 'GAS', 'FOSSIL_MISC', 'WINDOFFSHORE', 'WINDONSHORE', 'WATER', 'BIOGAS', 'SOLAR', 'PUMPSTORAGE', 'RENEWABLE_MISC'], 
+        value_vars=['NETZLAST', 'BRAUNKOHLE', 'STEINKOHLE', 'GAS', 'FOSSIL_MISC', 'WINDOFFSHORE', 'WINDONSHORE', 'WATER', 'BIOGAS', 'SOLAR', 'PUMPSTORAGE', 'RENEWABLE_MISC', 'Renew_Perc', 'Fossil_Perc', 'PRICE_DE'], 
         var_name='Energiequelle', 
         value_name='Werte'
         )
