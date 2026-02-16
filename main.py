@@ -16,7 +16,7 @@ GOOGLE_SHEET_NAME = "SMARD Energy Data" # muss ich noch anpassen
 SMARD_API_BASE_URL = "https://www.smard.de/app/chart_data/"
 REGION = "DE" # in the first place we focus on Germany
 RESOLUTION = "hour" # Datenpunkte im 60-Minuten-Raster
-BLOCKS_TO_FETCH = 30 # the number of blocks to be fetched / one block is one week 
+BLOCKS_TO_FETCH = 150 # the number of blocks to be fetched / one block is one week 
 
 # SMARD DATA IDs:
 # As I understood it is not possible to fetch several parameters at the same time
